@@ -311,6 +311,19 @@ void IndexHNSW::search(
     }
 }
 
+// logical deletion version of search
+void IndexHNSW::search_logic(
+        idx_t n,
+        const float* x,
+        idx_t k,
+        float* distances,
+        idx_t* labels,
+        const SearchParameters* params_in) {
+    search(n, x, k, distances, labels, params_in);
+
+    check_is_deleted(k, distances, labels);
+}
+
 void IndexHNSW::range_search(
         idx_t n,
         const float* x,
@@ -337,9 +350,35 @@ void IndexHNSW::add(idx_t n, const float* x) {
     FAISS_THROW_IF_NOT(is_trained);
     int n0 = ntotal;
     storage->add(n, x);
+    update_is_deleted(n); // for logical delete
     ntotal = storage->ntotal;
 
     hnsw_add_vertices(*this, n0, n, x, verbose, hnsw.levels.size() == ntotal);
+}
+
+// update is_deleted array when adding vectors to index.
+void IndexHNSW::update_is_deleted(size_t n) {
+    is_deleted.resize(ntotal + n); 
+    memset(is_deleted.data() + ntotal, 0, n); 
+}
+
+// mark as deleted
+void IndexHNSW::delete_logic(size_t n, idx_t* idx) {
+    for (int d = 0; d < n; ++d) {
+            is_deleted[idx[d]] = 1;
+    }
+}
+
+// check if the vector is deleted logically
+void IndexHNSW::check_is_deleted(idx_t k, float* distances, idx_t* labels) {
+    idx_t id;
+    for (int i = 0; i < k; ++i) {
+        id = labels[i];
+        if (is_deleted[id]) {
+            distances[i] = -1;
+            labels[i] = -1;
+        }
+    }
 }
 
 void IndexHNSW::delete_recnst(size_t n, idx_t* idx) {
