@@ -62,7 +62,7 @@ struct IndexHNSW : Index {
 
     void delete_logic(size_t n, idx_t* idx);
 
-    void check_is_deleted(idx_t k, float* distances, idx_t* labels);
+    void check_is_deleted(idx_t k, float* distances, idx_t* labels) const;
 
     /// Trains the storage if needed
     void train(idx_t n, const float* x) override;
@@ -75,15 +75,6 @@ struct IndexHNSW : Index {
             float* distances,
             idx_t* labels,
             const SearchParameters* params = nullptr) const override;
-
-    // use this search when using logical delete
-    void search_logic(
-            idx_t n,
-            const float* x,
-            idx_t k,
-            float* distances,
-            idx_t* labels,
-            const SearchParameters* params = nullptr);
 
     void range_search(
             idx_t n,

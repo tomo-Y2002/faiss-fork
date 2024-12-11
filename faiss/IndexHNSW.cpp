@@ -309,17 +309,6 @@ void IndexHNSW::search(
             distances[i] = -distances[i];
         }
     }
-}
-
-// logical deletion version of search
-void IndexHNSW::search_logic(
-        idx_t n,
-        const float* x,
-        idx_t k,
-        float* distances,
-        idx_t* labels,
-        const SearchParameters* params_in) {
-    search(n, x, k, distances, labels, params_in);
 
     check_is_deleted(k, distances, labels);
 }
@@ -370,7 +359,7 @@ void IndexHNSW::delete_logic(size_t n, idx_t* idx) {
 }
 
 // check if the vector is deleted logically
-void IndexHNSW::check_is_deleted(idx_t k, float* distances, idx_t* labels) {
+void IndexHNSW::check_is_deleted(idx_t k, float* distances, idx_t* labels) const{
     idx_t id;
     for (int i = 0; i < k; ++i) {
         id = labels[i];
