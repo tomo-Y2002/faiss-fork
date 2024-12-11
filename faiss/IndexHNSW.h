@@ -21,6 +21,14 @@ namespace faiss {
 
 struct IndexHNSW;
 
+/// Delete type for IndexHSNW
+enum DeleteType {
+    DELETE_NONE = 0,          ///< does not delete 
+    DELETE_LOGICAL = 1,       ///< logical delete
+    DELETE_RECONSTRUCT,       ///< reconstruct rather than delete
+    DELETE_PHYSICAL,          ///< physical delete
+};
+
 /** The HNSW index is a normal random-access index with a HNSW
  * link structure built on top */
 
@@ -29,6 +37,9 @@ struct IndexHNSW : Index {
 
     // the link structure
     HNSW hnsw;
+
+    // type of deletion
+    DeleteType deltype = DeleteType::DELETE_NONE;
 
     // array for delete flag
     std::vector<uint8_t> is_deleted;
@@ -56,13 +67,19 @@ struct IndexHNSW : Index {
 
     void add(idx_t n, const float* x) override;
 
-    void delete_recnst(size_t n, idx_t* idx);
+    /// Delete function {
+    void delete_ids(size_t n, idx_t* idx);
 
-    void update_is_deleted(size_t n);
+    void set_deltype(DeleteType _deltype);
+
+    void delete_recnst(size_t n, idx_t* idx);
 
     void delete_logic(size_t n, idx_t* idx);
 
+    void update_is_deleted(size_t n);
+
     void check_is_deleted(idx_t k, float* distances, idx_t* labels) const;
+    /// } Delete function 
 
     /// Trains the storage if needed
     void train(idx_t n, const float* x) override;
