@@ -28,6 +28,7 @@
 #include <faiss/impl/AuxIndexStructures.h>
 #include <faiss/impl/FaissAssert.h>
 #include <faiss/impl/ResultHandler.h>
+#include <faiss/impl/IDSelector.h>
 #include <faiss/utils/random.h>
 #include <faiss/utils/sorting.h>
 
@@ -308,6 +309,10 @@ void IndexHNSW::search(
             distances[i] = -distances[i];
         }
     }
+
+    if (deltype == DELETE_LOGICAL) {
+        check_is_deleted(k, distances, labels);
+    }
 }
 
 void IndexHNSW::range_search(
@@ -336,14 +341,85 @@ void IndexHNSW::add(idx_t n, const float* x) {
     FAISS_THROW_IF_NOT(is_trained);
     int n0 = ntotal;
     storage->add(n, x);
+    if (deltype == DELETE_LOGICAL) {
+        update_is_deleted(n); // for logical delete
+    }
     ntotal = storage->ntotal;
 
     hnsw_add_vertices(*this, n0, n, x, verbose, hnsw.levels.size() == ntotal);
 }
 
+// integration of delete operation
+void IndexHNSW::delete_ids(size_t n, idx_t* idx) {
+    FAISS_THROW_IF_NOT_MSG(
+        deltype,
+        "Delete option is not selected.");
+    
+    if (deltype == DELETE_NONE) {
+        FAISS_THROW_MSG(
+            "DeleteType is DELETE_NONE. Deletion is not supported in this condition!!");
+    } 
+    
+    if (deltype == DELETE_LOGICAL) {
+        // 論理削除
+        delete_logic(n, idx);
+    } else if (deltype == DELETE_RECONSTRUCT) {
+        // 再構築ver
+        delete_recnst(n, idx);
+    } else if (deltype == DELETE_PHYSICAL) {
+        // 物理削除ver
+        FAISS_THROW_MSG("Sorry, physical delete is not implemented right now :)");
+    }
+}
+
+// set the type of deletion
+void IndexHNSW::set_deltype(DeleteType _deltype) {
+	deltype = _deltype;
+}
+
+// [reconstruct_delete]
+void IndexHNSW::delete_recnst(size_t n, idx_t* idx) {
+    // 1. remove vector with indicated ids from storage
+	IDSelectorArray sel(n, idx);
+	storage->remove_ids(sel);
+	n = storage->ntotal;
+	
+	// 2. reset hnsw
+	hnsw.reset();
+	
+	// 3. reconstruct hnsw
+	hnsw_add_vertices(*this, 0, n, storage->get_codes_float(), verbose, hnsw.levels.size() == ntotal);
+}
+
+// [logical_delete] mark as deleted
+void IndexHNSW::delete_logic(size_t n, idx_t* idx) {
+    for (int d = 0; d < n; ++d) {
+        is_deleted[idx[d]] = 1;
+    }
+}
+
+// [logical_delete] update is_deleted array when adding vectors to index.
+void IndexHNSW::update_is_deleted(size_t n) {
+    is_deleted.resize(ntotal + n); 
+    memset(is_deleted.data() + ntotal, 0, n); 
+}
+
+// [logical_delete] check if the vector is deleted logically
+void IndexHNSW::check_is_deleted(idx_t k, float* distances, idx_t* labels) const{
+    idx_t id;
+    for (int i = 0; i < k; ++i) {
+        id = labels[i];
+        if (is_deleted[id]) {
+            distances[i] = -1;
+            labels[i] = -1;
+        }
+    }
+}
+
 void IndexHNSW::reset() {
     hnsw.reset();
     storage->reset();
+    is_deleted.clear();
     ntotal = 0;
 }
 
